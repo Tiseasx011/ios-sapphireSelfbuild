@@ -26,6 +26,14 @@ mnt=/mnt/ios
 [[ -d "$prefix/Applications/Sileo.app" ]] || { echo "missing Sileo.app in $prefix" >&2; exit 1; }
 [[ -f "$prefix/usr/lib/TweakLoader.dylib" ]] || { echo "missing ElleKit TweakLoader.dylib" >&2; exit 1; }
 [[ -x "$prefix/usr/sbin/sysctl" ]] || { echo "missing Procursus sysctl" >&2; exit 1; }
+[[ -x "$prefix/bin/sh" ]] || { echo "missing Procursus /bin/sh" >&2; exit 1; }
+[[ -f "$prefix/usr/lib/TweakInject/PreferenceLoader.dylib" ]] || {
+  echo "missing PreferenceLoader in TweakInject" >&2
+  exit 1
+}
+for name in chmod cp mkdir mv rm; do
+  [[ -x "$prefix/usr/bin/$name" ]] || { echo "missing Procursus command: $name" >&2; exit 1; }
+done
 
 mkdir -p "$out" "$mnt"
 mountpoint -q "$mnt" && { echo "$mnt is already mounted; refusing" >&2; exit 1; }
@@ -81,6 +89,17 @@ for name in sh bash; do
   if [[ ! -e "$mnt/bin/$name" && ! -L "$mnt/bin/$name" ]]; then
     ln -s "/var/jb/bin/$name" "$mnt/bin/$name"
   fi
+done
+# Sileo's root helper invokes these by their traditional absolute /bin paths.
+# Keep any native iOS implementation; otherwise install a real copy, not a symlink.
+for name in chmod cp mkdir mv rm; do
+  if [[ -e "$mnt/bin/$name" && ! -L "$mnt/bin/$name" ]]; then
+    continue
+  fi
+  rm -f "$mnt/bin/$name"
+  cp -p "$jb/usr/bin/$name" "$mnt/bin/$name"
+  chown 0:0 "$mnt/bin/$name"
+  chmod 755 "$mnt/bin/$name"
 done
 
 # Remove stale LaunchServices databases so the copied applications are discovered on boot.
