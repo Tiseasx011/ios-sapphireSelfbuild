@@ -24,7 +24,21 @@ mnt=/mnt/ios
 [[ -x "$prefix/usr/bin/dpkg" ]] || { echo "not a Procursus prefix: $prefix" >&2; exit 1; }
 [[ -x "$prefix/prep.sh" ]] || { echo "missing executable prep.sh in $prefix" >&2; exit 1; }
 [[ -d "$prefix/Applications/Sileo.app" ]] || { echo "missing Sileo.app in $prefix" >&2; exit 1; }
-[[ -f "$prefix/usr/lib/TweakLoader.dylib" ]] || { echo "missing ElleKit TweakLoader.dylib" >&2; exit 1; }
+# TweakLoader.dylib is intentionally an absolute /var/jb symlink in the Procursus
+# staging tree, so test its in-prefix target rather than following it on the build host.
+[[ -f "$prefix/usr/lib/ellekit/libinjector.dylib" ]] || {
+  echo "missing ElleKit injector: usr/lib/ellekit/libinjector.dylib" >&2
+  exit 1
+}
+if [[ -L "$prefix/usr/lib/TweakLoader.dylib" ]]; then
+  [[ "$(readlink "$prefix/usr/lib/TweakLoader.dylib")" == "/var/jb/usr/lib/ellekit/libinjector.dylib" ]] || {
+    echo "unexpected TweakLoader.dylib link target" >&2
+    exit 1
+  }
+elif [[ ! -f "$prefix/usr/lib/TweakLoader.dylib" ]]; then
+  echo "missing ElleKit TweakLoader.dylib" >&2
+  exit 1
+fi
 [[ -x "$prefix/usr/sbin/sysctl" ]] || { echo "missing Procursus sysctl" >&2; exit 1; }
 [[ -x "$prefix/bin/sh" ]] || { echo "missing Procursus /bin/sh" >&2; exit 1; }
 [[ -f "$prefix/usr/lib/TweakInject/PreferenceLoader.dylib" ]] || {
@@ -159,7 +173,8 @@ mv "$lp.new" "$lp"
 
 # Verify the installed tree and the launchd entries before touching the image again.
 test -x "$jb/prep.sh"
-test -f "$jb/usr/lib/TweakLoader.dylib"
+test -f "$jb/usr/lib/ellekit/libinjector.dylib"
+test -L "$jb/usr/lib/TweakLoader.dylib" || test -f "$jb/usr/lib/TweakLoader.dylib"
 test -f "$jb/Library/MobileSubstrate/DynamicLibraries" || \
   test -L "$jb/Library/MobileSubstrate/DynamicLibraries"
 test -f "$mnt/redwood/lib/libredwood-glload.dylib"
