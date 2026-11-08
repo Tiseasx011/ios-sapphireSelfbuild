@@ -40,7 +40,13 @@ elif [[ ! -f "$prefix/usr/lib/TweakLoader.dylib" ]]; then
   exit 1
 fi
 [[ -x "$prefix/usr/sbin/sysctl" ]] || { echo "missing Procursus sysctl" >&2; exit 1; }
-[[ -x "$prefix/bin/sh" ]] || { echo "missing Procursus /bin/sh" >&2; exit 1; }
+# /var/jb/bin/sh is an absolute symlink in the bootstrap; validate its in-prefix
+# interpreter target instead of following that link on the Linux build host.
+[[ -x "$prefix/usr/bin/dash" ]] || { echo "missing Procursus dash shell" >&2; exit 1; }
+[[ -x "$prefix/bin/sh" || ( -L "$prefix/bin/sh" && "$(readlink "$prefix/bin/sh")" == "/var/jb/usr/bin/dash" ) ]] || {
+  echo "missing or unexpected Procursus /bin/sh" >&2
+  exit 1
+}
 [[ -f "$prefix/usr/lib/TweakInject/PreferenceLoader.dylib" ]] || {
   echo "missing PreferenceLoader in TweakInject" >&2
   exit 1
