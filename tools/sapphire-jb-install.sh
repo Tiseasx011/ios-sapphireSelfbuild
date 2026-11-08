@@ -77,8 +77,11 @@ mount -t hfsplus -o loop,force "$img" "$mnt"
 
 # Install the complete prefix at the persistent /var location used by this port.
 rm -rf "$mnt/private/var/jb"
-cp -a "$prefix" "$mnt/private/var/jb"
+cp -R "$prefix" "$mnt/private/var/jb"
 jb="$mnt/private/var/jb"
+# The staging tree is built as the unprivileged host user. Normalize ownership
+# for iOS, then restore the writable mobile package-manager state below.
+chown -R 0:0 "$jb"
 
 # The mobile-owned package-manager state must be writable by Sileo.
 for d in var/mobile var/mobile/Library var/mobile/Library/Caches \
@@ -94,7 +97,7 @@ for app in "$jb"/Applications/*.app; do
   [[ -d "$app" ]] || continue
   name=${app##*/}
   rm -rf "$mnt/Applications/$name"
-  cp -a "$app" "$mnt/Applications/$name"
+  cp -R "$app" "$mnt/Applications/$name"
   chown -R 0:0 "$mnt/Applications/$name"
 done
 [[ -f "$mnt/Applications/Sileo.app/giveMeRoot" ]] || {
@@ -117,7 +120,7 @@ for name in chmod cp mkdir mv rm; do
     continue
   fi
   rm -f "$mnt/bin/$name"
-  cp -p "$jb/usr/bin/$name" "$mnt/bin/$name"
+  cp "$jb/usr/bin/$name" "$mnt/bin/$name"
   chown 0:0 "$mnt/bin/$name"
   chmod 755 "$mnt/bin/$name"
 done
@@ -129,7 +132,7 @@ find "$mnt/private/var/mobile/Containers/Data/InternalDaemon" \
 # Add both startup jobs to launchd's system cache. /var/jb/Library/LaunchDaemons
 # alone is not scanned by this port's launchd setup.
 lp="$mnt/System/Library/xpc/launchd.plist"
-cp -a "$lp" "$lp.new"
+cp "$lp" "$lp.new"
 python3 -I - "$lp.new" <<'PY'
 import plistlib, sys
 path = sys.argv[1]
@@ -173,8 +176,8 @@ for label in ('com.sapphire.glload', 'com.sapphire.jbprep'):
     assert len(matches) == 1, (label, len(matches))
 print('launchd.plist:', len(check['LaunchDaemons']), 'jobs; glload + jbprep verified')
 PY
-chown --reference="$lp" "$lp.new"
-chmod --reference="$lp" "$lp.new"
+chown 0:0 "$lp.new"
+chmod 644 "$lp.new"
 mv "$lp.new" "$lp"
 
 # Verify the installed tree and the launchd entries before touching the image again.
