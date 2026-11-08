@@ -24,10 +24,32 @@ fi
 bash "$here/mkiosroot.sh" "$os" "$sysos" "$appos" "$img" 16G
 
 mnt=$(mktemp -d)
+metal_tmp=$(mktemp -d)
+cleanup() {
+	mountpoint -q "$mnt" && umount "$mnt"
+	rm -rf "$metal_tmp"
+	rmdir "$mnt"
+}
+trap cleanup EXIT
+
+# Build SapphireMetal outside the mounted image so intermediate object files
+# never land in /System/Library/Extensions.
+bash "$here/../metal/build.sh" "$metal_tmp"
+[[ -x "$metal_tmp/SapphireMetal.bundle/SapphireMetal" ]] || {
+	echo "SapphireMetal build did not produce its executable" >&2
+	exit 1
+}
+
 fsck.hfsplus -fy "$img" | grep -v 'Illegal name' || true
 mount -t hfsplus -o loop,force "$img" "$mnt"
-trap 'mountpoint -q "$mnt" && umount "$mnt"; rmdir "$mnt"' EXIT
 python3 "$here/sweet-root-tweaks.py" "$mnt"
+
+# Install as an additional bundle; do not replace Apple's GPU extensions.
+metal_dest="$mnt/System/Library/Extensions/SapphireMetal.bundle"
+mkdir -p "$(dirname "$metal_dest")"
+rm -rf "$metal_dest"
+cp -a "$metal_tmp/SapphireMetal.bundle" "$metal_dest"
+echo "installed $metal_dest"
 umount "$mnt"
 # After a Linux mount the header says lastMountedVersion H+Lx with the journal
 # bit set; fsck -n then reports "Volume header needs minor repair" although
